@@ -63,6 +63,17 @@ library(lattice)
 library(lava)
 library(purrr)
 #library(dplyr)
+library(plyr)
+library(ggplot2)
+install.packages("labeling")
+install.packages("farver")
+library(labeling)
+library(farver)
+#library(readxl)
+
+
+
+
 
 #####################
 # Parallel processing
@@ -85,7 +96,7 @@ cl <- makeCluster(2)  # select number of cores
 registerDoParallel(cl) # register cluster
 getDoParWorkers()  # confirm number of cores being used by RStudio
 # Stop Cluster. After performing your tasks, make sure to stop your cluster. 
-stopCluster(cl)
+#stopCluster(cl)
 
 ##############
 # Import data
@@ -200,21 +211,21 @@ names(ds) <- c("ColumnName","ColumnName","ColumnName")
 #ds$ColumnName <- as.typeofdata(ds$ColumnName)
 oob_CR$brand <- as.factor(oob_CR$brand)
 # handle missing values (if applicable) 
-na.omit(oob_CR$Salary)
-na.omit(oob_CR$credit)
-na.omit(oob_CR$brand)
-na.omit(oob_CR$car)
-na.omit(oob_CR$age)
-na.omit(oob_CR$zipcode)
-na.omit(oob_CR$elevel)
-na.omit(oob_CR$brand)
+#na.omit(oob_CR$Salary)
+#na.omit(oob_CR$credit)
+#na.omit(oob_CR$brand)
+#na.omit(oob_CR$car)
+#na.omit(oob_CR$age)
+#na.omit(oob_CR$zipcode)
+#na.omit(oob_CR$elevel)
+#na.omit(oob_CR$brand)
 is.na(oob_CR)
 na.exclude(oob_CR$brand) 
 na.exclude(oob_CR$age)
 na.exclude(oob_CR$Salary)        
 oob_CR$credit[is.na(oob_CR$credit)] <- mean(oob_CR$credit,na.rm = TRUE)
-na.omit(oob_CR$credit)
-na.omit(oob_CR$credit)
+#na.omit(oob_CR$credit)
+#na.omit(oob_CR$credit)
 
 str(oob_CR)
 #> str(oob_CR)
@@ -267,13 +278,29 @@ summary(oob_CR)
 
 
 # plots
-hist(oob_CR$brand)
+hist(oob_CR$brand)##(before preprocessing brand)
 plot(oob_CR$salary, oob_CR$brand)
 plot(oob_CR$age, oob_CR$brand)
 plot(oob_CR$credit, oob_CR$brand)
 plot(oob_CR$car, oob_CR$brand)
 plot(oob_CR$zipcode, oob_CR$brand)
 qqnorm(oob_CR$age) # Be familiar with this plot, but don't spend a lot of time on it
+
+
+#library(readxl)
+oob_CR <-read_csv("CompleteResponses.csv")
+oob_CR$brand=ifelse(oob_CR$brand=="1","sony","acer")
+oob_CR$brand<-as.factor(oob_CR$brand)
+ggplot(data = oob_CR ,mapping = aes(x = brand,fill=brand))+geom_bar()+
+  geom_text(stat="count",aes(label=..count..,y=..count..), vjust=10)
+
+
+#####
+oob_IR <-read_csv("Surveyincomplete.csv")
+oob_IR$brand=ifelse(oob_IR$brand=="1","sony","acer")
+oob_IR$brand<-as.factor(oob_IR$brand)
+ggplot(data = oob_IR ,mapping = aes(x = brand,fill=brand))+geom_bar()+
+  geom_text(stat="count",aes(label=..count..,y=..count..), vjust=10)
 
 
 ################
@@ -1192,12 +1219,58 @@ summary(oob_IR$brand)
 # plot predicted verses actual
 plot(rfPred1, oob_IR$brand)
 
+Data <- c("oob_CR", "rfPred1", "Total")
+Acer <- c(3744,1915,5659)
+Sony <- c(6154, 3085, 9239)
+totals <- data.frame(Data, Acer, Sony)
+totals
+#Data Acer Sony
+#1  oob_CR 3744 6154
+#2 rfPred1 1915 3085
+#3   Total 5659 9239
+
+#create new table with surveyIncomplete and predictions----
+  predictions_table <- oob_IR[1:6]
+predictions_table$brand <-rfPred1
+head(predictions_table)
+# A tibble: 6 x 7
+#salary   age elevel   car zipcode  credit brand
+#<dbl> <dbl>  <dbl> <dbl>   <dbl>   <dbl> <fct>
+#1 150000     76      1     3       3 377980. 1    
+#2  82524.    51      1     8       3 141658. 0    
+#3 115647.    34      0    10       2 360980. 1    
+#4 141443.    22      3    18       2 282736. 1    
+#5 149211.    56      0     5       3 215667. 1    
+#6  46202.    26      4    12       1 150419. 1 
+
+#According to the Complete Surveys: 
+summary(oob_CR$brand)
+#> summary(oob_CR$brand)
+#acer sony 
+#3744 6154 
+
+#According to the Incomplete Surveys (predictions): 
+summary(rfPred1)
+#> summary(rfPred1)
+#0    1 
+#1915   3085 
 
 
 
+#Total:(summary oob_CR before preprocessing brand) 
+answers <- summary(oob_CR$brand) + summary(rfPred1)
+#answers
+#acer sony 
+#5659 9239 
 
+#Create a new data set with all the survey's answers: real responses and predictions 
+table.total <- rbind(oob_CR[1:7], predictions_table[, c(1:7)])
 
+##change 0 to Acer and 1 to Sony, and add a column brand_name 
+table.total$brand_name <- ifelse(table.total$brand == 1, "Sony", "Acer")
 
-
-
-
+#using ggplot to draw barchart for incomplete data
+ggplot(data = table.total, mapping = aes(x = brand_name)) +
+  geom_bar(position = "dodge") +
+  labs(x="Brand", y="Count", title="What brand do our customers prefer?") +
+  geom_bar()+geom_text(stat='count', aes(label=..count..), vjust=5, col="orange", size=4)
